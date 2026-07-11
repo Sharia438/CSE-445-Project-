@@ -1,0 +1,14 @@
+﻿# Trend Detector dependencies (Week 10)
+pandas
+numpy
+scikit-learn
+hdbscan
+sentence-transformers
+umap-learn
+praw
+python-dotenv
+streamlit
+openai
+matplotlib
+seaborn
+jupyter
