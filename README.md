@@ -101,6 +101,23 @@ Stop with `Ctrl+C`. The streamer reconnects automatically on network / API error
 python src/data_ingestion/historical_loader.py
 ```
 
+### Static clustering baseline (NLP + HDBSCAN/DBSCAN)
+
+Embeds `data/master_dataset.csv` with `sentence-transformers` and prints a
+cluster summary (size + sample titles per cluster):
+
+```bash
+python -m src.ml_engine.static_clustering
+# or, to try the DBSCAN baseline instead of HDBSCAN
+python -m src.ml_engine.static_clustering --method dbscan
+```
+
+Or explore interactively:
+
+```bash
+jupyter notebook notebooks/02_clustering_tests.ipynb
+```
+
 ### Streamlit dashboard
 
 ```bash
