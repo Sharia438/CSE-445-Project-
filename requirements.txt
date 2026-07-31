@@ -3,6 +3,7 @@ pandas
 numpy
 scikit-learn
 hdbscan
+torch
 sentence-transformers
 umap-learn
 praw
