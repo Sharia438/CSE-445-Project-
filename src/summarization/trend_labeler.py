@@ -18,8 +18,6 @@ import logging
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 LOGGER = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -118,6 +116,8 @@ def label_cluster(titles: list[str], api_key: str | None = None) -> dict[str, st
     variable (loaded from ``.env`` if present).
     """
     if api_key is None:
+        from dotenv import load_dotenv
+
         load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
         api_key = os.getenv("GEMINI_API_KEY", "").strip() or None
 

@@ -10,10 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import praw
-from dotenv import load_dotenv
-from prawcore.exceptions import PrawcoreException
-
 SUBREDDITS = "technology+news+worldnews"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = PROJECT_ROOT / "data" / "master_dataset.csv"
@@ -30,6 +26,8 @@ LOGGER = logging.getLogger(__name__)
 
 def load_credentials() -> tuple[str, str, str]:
     """Load and validate Reddit credentials from .env."""
+    from dotenv import load_dotenv
+
     load_dotenv(dotenv_path=DOTENV_PATH)
 
     client_id = os.getenv("REDDIT_CLIENT_ID", "").strip()
@@ -52,8 +50,17 @@ def load_credentials() -> tuple[str, str, str]:
     return client_id, client_secret, user_agent
 
 
-def build_reddit() -> praw.Reddit:
-    """Create an authenticated, read-only Reddit client."""
+def build_reddit() -> "praw.Reddit":
+    """Create an authenticated, read-only Reddit client.
+
+    ``praw`` is imported lazily (here, not at module level) so that
+    everything else in this module - and anything importing it just for
+    ``CSV_PATH``/``FIELDNAMES``, e.g. ``historical_loader.py`` - doesn't
+    require ``praw`` to be installed. Live streaming is the only thing
+    that actually needs it.
+    """
+    import praw
+
     client_id, client_secret, user_agent = load_credentials()
     reddit = praw.Reddit(
         client_id=client_id,
@@ -124,6 +131,8 @@ def stream_loop() -> None:
 
 def main() -> None:
     """Run the stream forever with automatic reconnects."""
+    from prawcore.exceptions import PrawcoreException
+
     while True:
         try:
             stream_loop()
