@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import itertools
 import logging
+import tempfile
+from pathlib import Path
 
 import pandas as pd
 
@@ -19,7 +21,7 @@ from src.evaluation.burst_benchmark import evaluate_burst_detection
 from src.evaluation.injection import inject_bursts
 from src.evaluation.metrics import score_dynamic
 from src.ml_engine.dynamic_engine import DynamicClusteringEngine, run_replay
-from src.ml_engine.vectorizer import TextVectorizer
+from src.ml_engine.vectorizer import TextVectorizer, embed_corpus_cached
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,11 +38,22 @@ def sweep_dynamic_engine(
     n_bursts: int = 6,
     posts_per_burst: int = 60,
     label_column: str = "source",
+    cache_dir: str | Path | None = None,
 ) -> pd.DataFrame:
     """Grid over (similarity_threshold, half_life_hours, text_mode),
     scoring each cell on cluster quality (ARI/NMI vs ``label_column``) and
     burst-detection performance (recall/precision/latency, via a fresh
-    burst injection per cell).
+    burst injection per ``text_mode``).
+
+    Embeddings only depend on ``text_mode``, not on
+    ``similarity_threshold``/``half_life_hours`` - so for each
+    ``text_mode`` this embeds the injected corpus (a superset of ``df``'s
+    ids) exactly once into a writable cache under ``cache_dir`` (a fresh
+    temp directory by default - never the vectorizer's project-default
+    path, which is read-only on Kaggle) and every grid cell below reuses
+    it. Without this, each of the ``len(similarity_grid) *
+    len(half_life_hours_grid)`` cells would re-embed the same posts from
+    scratch.
 
     Returns a tidy DataFrame, one row per grid cell, sorted by a combined
     score (mean of ARI and burst F1) descending - useful for picking new
@@ -48,10 +61,26 @@ def sweep_dynamic_engine(
     notebook.
     """
     vectorizer = TextVectorizer()
+    cache_dir = Path(cache_dir) if cache_dir is not None else Path(tempfile.mkdtemp(prefix="sweep_cache_"))
+    cache_dir.mkdir(parents=True, exist_ok=True)
     rows = []
 
     for text_mode in text_mode_grid:
         corpus, truth = inject_bursts(df, n_bursts=n_bursts, posts_per_burst=posts_per_burst)
+
+        embeddings_path = cache_dir / f"sweep_{text_mode}_embeddings.npy"
+        ids_path = cache_dir / f"sweep_{text_mode}_ids.npy"
+        meta_path = cache_dir / f"sweep_{text_mode}_meta.json"
+        # Prime the cache with `corpus` (df's posts + injected bursts) so
+        # every `df`-only embed below is a pure cache hit too.
+        embed_corpus_cached(
+            corpus,
+            vectorizer=vectorizer,
+            text_mode=text_mode,
+            embeddings_path=embeddings_path,
+            ids_path=ids_path,
+            meta_path=meta_path,
+        )
 
         for similarity_threshold, half_life_hours in itertools.product(
             similarity_grid, half_life_hours_grid
@@ -68,7 +97,13 @@ def sweep_dynamic_engine(
                 similarity_threshold=similarity_threshold, half_life_seconds=half_life_seconds
             )
             quality_result = run_replay(
-                df, vectorizer=vectorizer, engine=quality_engine, text_mode=text_mode
+                df,
+                vectorizer=vectorizer,
+                engine=quality_engine,
+                text_mode=text_mode,
+                embeddings_path=embeddings_path,
+                ids_path=ids_path,
+                meta_path=meta_path,
             )
             quality = score_dynamic(quality_result.assignments, df, label_column=label_column)
 
@@ -81,6 +116,9 @@ def sweep_dynamic_engine(
                 },
                 vectorizer=vectorizer,
                 text_mode=text_mode,
+                embeddings_path=embeddings_path,
+                ids_path=ids_path,
+                meta_path=meta_path,
             )
 
             rows.append(
