@@ -18,7 +18,7 @@ SUBREDDITS = "technology+news+worldnews"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = PROJECT_ROOT / "data" / "master_dataset.csv"
 DOTENV_PATH = PROJECT_ROOT / ".env"
-FIELDNAMES = ["post_id", "title", "text", "source", "timestamp"]
+FIELDNAMES = ["post_id", "title", "text", "source", "platform", "timestamp"]
 RECONNECT_DELAY = 30
 
 logging.basicConfig(
@@ -86,6 +86,7 @@ def parse_submission(submission: Any) -> dict[str, str] | None:
         "title": title,
         "text": combined_text,
         "source": str(submission.subreddit),
+        "platform": "reddit",
         "timestamp": timestamp,
     }
 
