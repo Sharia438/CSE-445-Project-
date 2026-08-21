@@ -11,11 +11,17 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 
 import numpy as np
 import pandas as pd
 
-from src.ml_engine.vectorizer import DEFAULT_CSV_PATH, TextVectorizer, load_corpus
+from src.ml_engine.vectorizer import (
+    DEFAULT_CSV_PATH,
+    TextVectorizer,
+    embed_corpus_cached,
+    load_corpus,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -115,14 +121,20 @@ def cluster_summary(
 
 def run_static_pipeline(
     csv_path: str = str(DEFAULT_CSV_PATH),
+    df: pd.DataFrame | None = None,
+    vectorizer: TextVectorizer | None = None,
     method: str = "hdbscan",
     use_umap: bool = True,
     umap_components: int = DEFAULT_UMAP_COMPONENTS,
     min_cluster_size: int = DEFAULT_MIN_CLUSTER_SIZE,
     min_samples: int = DEFAULT_MIN_SAMPLES,
     eps: float = DEFAULT_DBSCAN_EPS,
+    text_mode: str = "text",
 ) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
     """End-to-end baseline: load corpus -> embed -> (optional UMAP) -> cluster.
+
+    Pass ``df`` directly (e.g. a demo subset already loaded by a caller like
+    the dashboard) to skip re-reading ``csv_path`` from disk.
 
     Returns:
         df: the loaded corpus (post-dedup/cleaning)
@@ -132,10 +144,11 @@ def run_static_pipeline(
     if method not in ("hdbscan", "dbscan"):
         raise ValueError(f"Unknown clustering method: {method!r}")
 
-    df = load_corpus(csv_path)
-    LOGGER.info("Loaded %d rows from %s", len(df), csv_path)
+    if df is None:
+        df = load_corpus(csv_path)
+        LOGGER.info("Loaded %d rows from %s", len(df), csv_path)
 
-    embeddings = TextVectorizer().fit_transform(df["text"].tolist())
+    embeddings = embed_corpus_cached(df, vectorizer=vectorizer, text_mode=text_mode)
     LOGGER.info("Embedded corpus into shape %s", embeddings.shape)
 
     cluster_input = embeddings
@@ -167,10 +180,18 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--min-cluster-size", type=int, default=DEFAULT_MIN_CLUSTER_SIZE)
     parser.add_argument("--min-samples", type=int, default=DEFAULT_MIN_SAMPLES)
     parser.add_argument("--eps", type=float, default=DEFAULT_DBSCAN_EPS)
+    parser.add_argument("--text-mode", choices=["text", "title_text"], default="text")
     return parser.parse_args()
 
 
 def main() -> None:
+    # Real multi-platform text (Twitter/YouTube/Reddit) can contain
+    # non-Latin-1 characters that Windows' default console encoding
+    # (cp1252) can't display; degrade to '?' instead of crashing.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
     args = _parse_args()
 
@@ -181,6 +202,7 @@ def main() -> None:
         min_cluster_size=args.min_cluster_size,
         min_samples=args.min_samples,
         eps=args.eps,
+        text_mode=args.text_mode,
     )
 
     summary = cluster_summary(df, labels)

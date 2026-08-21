@@ -9,7 +9,9 @@ umap-learn
 praw
 python-dotenv
 streamlit
-openai
+google-genai
 matplotlib
 seaborn
 jupyter
+datasets
+pytest
