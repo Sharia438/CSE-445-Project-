@@ -2,6 +2,8 @@
 
 CSE 445 — end-to-end NLP and unsupervised ML pipeline that ingests historical and live social media posts, embeds them with transformers, and uses incremental clustering to surface emerging trends in near real time.
 
+**Live demo:** https://76df-116-206-57-65.ngrok-free.app
+
 ## Pipeline
 
 1. **Ingest** — load historical data from four platforms (Reddit, Twitter/X, YouTube, Bluesky) plus live Reddit submissions via PRAW, all merged into one `platform`-tagged master dataset
